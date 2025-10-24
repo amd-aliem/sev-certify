@@ -7,7 +7,7 @@ on:
         required: false
         type: boolean
       beacon_owner:
-        description: 'Forked beacon owner'
+        description: 'Beacon Repo Owner (optional)'
         required: false
         type: string
   pull_request:
