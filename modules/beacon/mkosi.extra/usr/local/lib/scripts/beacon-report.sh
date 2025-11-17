@@ -3,7 +3,6 @@ set -euo pipefail
 
 SEV_VERSIONS=("3.0-0")
 SEV_CERT_FILE=""
-SET_MILESTONE="${SET_MILESTONE:-false}"
 
 # Determine OS name and version
 if [ -f /etc/os-release ]; then
@@ -36,8 +35,8 @@ for sev_version in "${SEV_VERSIONS[@]}"; do
   SEV_CERT_FILE="${HOME:-/root}/sev_certificate_v${sev_version}.txt"
 
   # Call beacon
-  if [ -e "${SEV_CERT_FILE}" ] && [ -z "$(grep "❌" "${SEV_CERT_FILE}")" ] && [ "${SET_MILESTONE}" == "true" ]; then
-    # Add milestone if no errors encountered and if this is a release build.
+  if [ -e "${SEV_CERT_FILE}" ] && [ -z "$(grep "❌" "${SEV_CERT_FILE}")" ]; then
+    # Add milestone if no errors encountered
     beacon report --title "$SEV_TITLE" --body "$SEV_CERT_FILE" --label "certificate" --label "os-${OS_LABEL}" --milestone "v${sev_version}"
   else
     beacon report --title "$SEV_TITLE" --body "$SEV_CERT_FILE" --label "certificate" --label "os-${OS_LABEL}"
