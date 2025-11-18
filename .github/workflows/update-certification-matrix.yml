@@ -4,12 +4,17 @@ on:
   issues:
     types: [opened]
 
+concurrency:
+  group: update-certification-matrix
+  cancel-in-progress: false
+
 jobs:
   update-matrix:
     if: contains(github.event.issue.labels.*.name, 'certificate') && github.event.issue.milestone != null
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -20,13 +25,10 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            // Read the README content
-            const readmePath = 'README.md';
-            const content = fs.readFileSync(readmePath, 'utf8');
-
             // Get issue details
             const issue = context.payload.issue;
             const milestone = issue.milestone.title;
+            const readmePath = 'README.md';
 
             /// Find distribution label (format: "os-<string>", "os-<string>-<number>", or "os-<string>-<string>")
             const distroLabel = issue.labels.find(label =>
@@ -51,6 +53,75 @@ jobs:
             const capitalize = str => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
             const osName = version ? `${capitalize(os)} ${capitalize(version)}` : capitalize(os);
             const osPattern = version ? new RegExp(`^\\|\\s*${os}\\s+${version}\\s*\\|`, 'i') : new RegExp(`^\\|\\s*${os}\\s*\\|`, 'i');
+
+            // Use a single branch for all certification matrix updates
+            const branchName = `update-certification-matrix`;
+            const commitMessage = `Update certification matrix for ${osName}`;
+
+            // Get the default branch
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            const defaultBranch = repo.default_branch;
+
+            // Get the SHA of the default branch
+            const { data: refData } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/${defaultBranch}`
+            });
+            const baseSha = refData.object.sha;
+
+            // Check if branch already exists
+            let branchExists = false;
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branchName}`
+              });
+              branchExists = true;
+              console.log(`Branch ${branchName} already exists, will fast-forward to main`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              console.log(`Creating new branch ${branchName}`);
+            }
+
+            // Create or update branch to point to latest main
+            if (!branchExists) {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: baseSha
+              });
+              console.log(`Created branch ${branchName} from main`);
+            } else {
+              // Try to rebase the branch onto main
+              try {
+                await github.rest.git.updateRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                  sha: baseSha,
+                  force: false
+                });
+                console.log(`Rebased ${branchName} onto main`);
+              } catch (error) {
+                // If update fails, it means branch is ahead or diverged - this is fine
+                console.log(`Branch ${branchName} is already up to date or ahead of main`);
+              }
+            }
+
+            // Get current file content from the branch (after fast-forward)
+            const { data: fileData } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: readmePath,
+              ref: branchName
+            });
+            const content = Buffer.from(fileData.content, 'base64').toString('utf8');
 
             // Create new table row content
             const newStatus = '✅'; // Assuming new certification issues indicate passing
@@ -96,22 +167,46 @@ jobs:
               lines.splice(tableEnd, 0, newRow);
             }
 
-            // Write back to README
-            fs.writeFileSync(readmePath, lines.join('\n'));
-
-            // Create commit
+            // Commit changes to the branch
             await github.rest.repos.createOrUpdateFileContents({
               owner: context.repo.owner,
               repo: context.repo.repo,
               path: readmePath,
-              message: `Update certification matrix for ${osName}`,
+              message: commitMessage,
               content: Buffer.from(lines.join('\n')).toString('base64'),
-              sha: (await github.rest.repos.getContent({
+              sha: fileData.sha,
+              branch: branchName
+            });
+
+            // Check if PR already exists for this branch
+            const { data: existingPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${branchName}`
+            });
+
+            if (existingPRs.length > 0) {
+              console.log(`PR already exists: #${existingPRs[0].number}`);
+              // Add a comment to the existing PR
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                path: readmePath
-              })).data.sha
-            });
+                issue_number: existingPRs[0].number,
+                body: `Updated certification matrix for **${osName}** (${milestone}) - refs #${issue.number}`
+              });
+            } else {
+              // Create new PR
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Update certification matrix`,
+                head: branchName,
+                base: defaultBranch,
+                body: `This PR automatically updates the certification matrix based on certification issues.\n\nStarted with: **${osName}** (${milestone}) - refs #${issue.number}`
+              });
+              console.log(`Created PR #${pr.number}`);
+            }
   close-duplicates:
     if: contains(github.event.issue.labels.*.name, 'certificate') && github.event.issue.milestone != null
     runs-on: ubuntu-latest
