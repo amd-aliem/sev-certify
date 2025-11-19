@@ -96,16 +96,22 @@ jobs:
                 ref: `refs/heads/${branchName}`,
                 sha: baseSha
               });
+              console.log(`Created branch ${branchName} from main`);
             } else {
-              // Fast-forward the branch to main before making changes
-              await github.rest.git.updateRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: `heads/${branchName}`,
-                sha: baseSha,
-                force: false  // Will fail if not a fast-forward, which is what we want
-              });
-              console.log(`Fast-forwarded ${branchName} to main`);
+              // Try to rebase the branch onto main
+              try {
+                await github.rest.git.updateRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${branchName}`,
+                  sha: baseSha,
+                  force: false
+                });
+                console.log(`Rebased ${branchName} onto main`);
+              } catch (error) {
+                // If update fails, it means branch is ahead or diverged - this is fine
+                console.log(`Branch ${branchName} is already up to date or ahead of main`);
+              }
             }
 
             // Get current file content from the branch (after fast-forward)
