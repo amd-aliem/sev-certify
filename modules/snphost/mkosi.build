@@ -2,9 +2,8 @@
 set -euo pipefail
 set -x
 
-# Fetch latest release tag from GitHub API
-LATEST_TAG=$(curl -s https://api.github.com/repos/virtee/snphost/releases/latest \
-  | jq -r '.tag_name')
+# Use SNPHOST_TAG if set, otherwise fetch from GitHub API
+LATEST_TAG="${SNPHOST_TAG:-$(curl -s https://api.github.com/repos/virtee/snphost/releases/latest | jq -r '.tag_name')}"
 
 # Download and install into DESTDIR with correct permissions
 curl -fsSL "https://github.com/virtee/snphost/releases/download/${LATEST_TAG}/snphost" \
