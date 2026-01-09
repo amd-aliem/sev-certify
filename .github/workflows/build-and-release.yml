@@ -88,6 +88,22 @@ jobs:
           sudo apt update
           sudo apt install -y mkosi
 
+      - name: Fetch latest release tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          # Fetch latest tags using gh CLI (automatically authenticated)
+          SNPGUEST_TAG=$(gh release view --repo virtee/snpguest --json tagName --jq '.tagName')
+          BEACON_TAG=$(gh release view --repo AMDEPYC/beacon --json tagName --jq '.tagName')
+          SNPHOST_TAG=$(gh release view --repo virtee/snphost --json tagName --jq '.tagName')
+          
+          # Inject environment variables into mkosi.conf files
+          sed -i "/^\[Build\]/a\Environment=SNPGUEST_TAG=$SNPGUEST_TAG" modules/snpguest-build/mkosi.conf
+          sed -i "/^\[Build\]/a\Environment=BEACON_TAG=$BEACON_TAG" modules/beacon/mkosi.conf
+          sed -i "/^\[Build\]/a\Environment=SNPHOST_TAG=$SNPHOST_TAG" modules/snphost/mkosi.conf
+
       - name: Build guest-${{ matrix.distro }}-${{ matrix.release }}
         run: |
           sudo mkosi --image-id=guest-${{ matrix.distro }}-${{ matrix.release }} -C images/guest-${{ matrix.distro }}-${{ matrix.release }}/ cat-config
@@ -156,4 +172,3 @@ jobs:
             "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$ASSET_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
