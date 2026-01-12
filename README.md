@@ -17,6 +17,7 @@ This table contains operating systems that have undergone certification testing 
 | CentOS 10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/77) |
 | Rocky 10.0 |  ❌ |  N/A |
 | Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/75) |
+| Debian Forky | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/79) |
 
 ✅ Passing tests for latest certification level
 ❌ Not Certified for latest level
