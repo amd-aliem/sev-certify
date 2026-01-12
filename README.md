@@ -9,8 +9,8 @@ The purpose of this repository is to provide a unified framework for testing and
 
 This table contains operating systems that have undergone certification testing for AMD features through this repository. 
 
-| OS |  Status |  Certification Level |
-|---|---|---|
+| OS | Status | [3.0 Certification][cert-3.0] | [3.1 Certification][cert-3.1] | [4.0 Certification][cert-4.0] | [4.1 Certification][cert-4.1] |
+|---|---|---|---|---|---|
 | Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/231) |
 | Debian 13 |  ❌ |  [N/A](https://github.com/AMDEPYC/sev-certify/issues/152) |
 | Fedora 41 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/229) |
@@ -38,5 +38,10 @@ _Issue tags and details to be added here._
 
 
 Host and Guest images are constructed in GitHub Workflows via [`mkosi`](https://github.com/systemd/mkosi). Host images are designed to be booted on a SEV-enabled EPYC server, and are configured with a series of tests in the form of custom systemd services that will run on an embedded guest image. The resulting host and guest images are available in GitHub releases.
+
+[cert-3.0]: ./docs/certifications.md#amd-epyc-7003-milan
+[cert-3.1]: ./docs/certifications.md#amd-epyc-9004-genoa
+[cert-4.0]: ./docs/certifications.md#amd-epyc-7004-bergamo
+[cert-4.1]: ./docs/certifications.md#amd-epyc-9005-bergamo
 
 
