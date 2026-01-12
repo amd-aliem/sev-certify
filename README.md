@@ -13,7 +13,7 @@ This table contains operating systems that have undergone certification testing 
 |---|---|---|
 | Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/76) |
 | Debian 13 | ✅ | [v3.0-0](https://github.com/amd-aliem/sev-certify/issues/65) |
-| Fedora 41 | ✅ | [v3.0-0](https://github.com/amd-aliem/sev-certify/issues/63) |
+| Fedora 41 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/80) |
 | CentOS 10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/77) |
 | Rocky 10.0 |  ❌ |  N/A |
 | Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/75) |
