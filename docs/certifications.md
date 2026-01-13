@@ -25,6 +25,7 @@ AMD EPYC 9004 (Genoa)
 -------------
 | OS |  Status |  3.0 Certification | 3.1 Certification |
 |---|---|---|---|
+| Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/134) |
 
 AMD EPYC 8005 (Sorano)
 -------------
