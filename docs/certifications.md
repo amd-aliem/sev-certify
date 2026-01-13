@@ -26,6 +26,7 @@ AMD EPYC 9004 (Genoa)
 | OS |  Status |  3.0 Certification | 3.1 Certification |
 |---|---|---|---|
 
+| Debian 13 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/92) |
 AMD EPYC 8005 (Sorano)
 -------------
 | OS |  Status |  3.0 Certification | 3.1 Certification | 4.0 Certification |
