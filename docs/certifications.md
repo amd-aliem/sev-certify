@@ -33,6 +33,7 @@ AMD EPYC 8005 (Sorano)
 
 AMD EPYC 9005 (Turin)
 -------------
+| Fedora 41 | ✅ |  |  | [c4.0.0-0](https://github.com/amd-aliem/sev-certify/issues/106) |
 | OS |  Status |  3.0 Certification | 3.1 Certification | 4.0 Certification | 4.1 Certification |
 |---|---|---|---|---|---|
 
