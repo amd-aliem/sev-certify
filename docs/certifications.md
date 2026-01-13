@@ -28,6 +28,7 @@ AMD EPYC 9004 (Genoa)
 
 AMD EPYC 8005 (Sorano)
 -------------
+| Fedora 41 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/94) |
 | OS |  Status |  3.0 Certification | 3.1 Certification | 4.0 Certification |
 |---|---|---|---|---|
 
