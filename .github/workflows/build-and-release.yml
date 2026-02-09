@@ -96,7 +96,7 @@ jobs:
           
           # Fetch latest tags using gh CLI (automatically authenticated)
           SNPGUEST_TAG=$(gh release view --repo virtee/snpguest --json tagName --jq '.tagName')
-          BEACON_TAG=$(gh release view --repo AMDEPYC/beacon --json tagName --jq '.tagName')
+          BEACON_TAG=$(gh release view --repo amd-aliem/beacon --json tagName --jq '.tagName')
           SNPHOST_TAG=$(gh release view --repo virtee/snphost --json tagName --jq '.tagName')
           
           # Inject environment variables into mkosi.conf files
