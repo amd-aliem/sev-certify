@@ -246,7 +246,7 @@ This project is licensed under the terms specified in [LICENSE](./LICENSE).
 
 [cert-3.0]: ./docs/certifications.md#amd-epyc-7003-milan
 [cert-3.1]: ./docs/certifications.md#amd-epyc-9004-genoa
-[cert-4.0]: ./docs/certifications.md#amd-epyc-7004-bergamo
-[cert-4.1]: ./docs/certifications.md#amd-epyc-9005-bergamo
+[cert-4.0]: ./docs/certifications.md#amd-epyc-8005-sorano
+[cert-4.1]: ./docs/certifications.md#amd-epyc-9005-turin
 [hardware-tables]: ./docs/certifications.md#certification-levels-by-hardware
 [cert-definitions]: ./docs/certifications.md#certification-level-definitions
