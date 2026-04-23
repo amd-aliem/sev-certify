@@ -23,37 +23,33 @@ Source: AMD SEV-SNP Firmware ABI Specification, Revision 1.58 (Document #56860)
 
 **Platform State Requirement:** The platform must be in the **INIT** state.
 
-**Input Parameters:**
+**Input Parameters (Table 47, CMDBUF_SNP_CONFIG):**
 
-| Field          | Size (bytes) | Description                                                    |
-|----------------|-------------|----------------------------------------------------------------|
-| REPORTED_TCB   | 8           | Desired TCB_VERSION to report in guest attestation reports     |
-| MASK_CHIP_ID   | 4           | If set, the CHIP_ID field in attestation reports is zero-filled|
-| MASK_CHIP_KEY  | 4           | If set, VCEK is mixed with zeros instead of chip unique key    |
-| Reserved       | 0x3F0       | Reserved, must be zero                                         |
+| Offset | Field         | Bits  | Description                                                       |
+|--------|---------------|-------|-------------------------------------------------------------------|
+| 00h    | REPORTED_TCB  | 63:0  | Desired TCB_VERSION to report in guest attestation reports        |
+| 08h    | MASK_CHIP_ID  | 0     | If set, the CHIP_ID field in attestation reports is zero-filled   |
+| 08h    | MASK_CHIP_KEY | 1     | If set, VCEK is not used in attestation or guest key derivation   |
+| 08h    | Reserved      | 31:2  | Reserved, must be zero                                            |
+| 0Ch    | Reserved      | -     | Reserved, must be zero                                            |
 
-Total structure size: 1024 bytes (0x400).
+Total structure size: 64 bytes (0x40).
 
 **Behavior:**
 - When `REPORTED_TCB` is non-zero, the firmware sets the internal
   `ReportedTcb` to the supplied value. All subsequent attestation reports will
   use this value and the VCEK will be derived from it.
-- When `REPORTED_TCB` is zero, `ReportedTcb` is reset to `CurrentTcb`.
+- When `REPORTED_TCB` is zero, `ReportedTcb` is reset to `CommittedTcb`.
 - The platform enforces the invariant `ReportedTcb <= CommittedTcb <= CurrentTcb`.
-  `REPORTED_TCB` can be set to any value up to `CurrentTcb`; setting any field
-  higher than `CurrentTcb` will fail with `INVALID_PARAM`. The hypervisor
-  typically sets `REPORTED_TCB` at or below `CommittedTcb` to hide provisional
-  firmware updates from guests.
+  `REPORTED_TCB` must be less than or equal to `CommittedTcb`; setting any field
+  higher than `CommittedTcb` will fail with `INVALID_PARAM`.
 - `MASK_CHIP_ID` and `MASK_CHIP_KEY` control privacy and key usage features.
   See [MASK_CHIP_ID and MASK_CHIP_KEY Use Cases](#mask_chip_id-and-mask_chip_key-use-cases)
   below for detailed behavior and use cases.
 
-**Error Conditions:**
-- `INVALID_LENGTH` - Input buffer too small.
+**Error Conditions (Table 48):**
+- `INVALID_PARAM` - Any field of `REPORTED_TCB` exceeds `CommittedTcb`.
 - `INVALID_PLATFORM_STATE` - Platform is not in INIT state.
-- `INVALID_PARAM` - Any field of `REPORTED_TCB` exceeds `CurrentTcb`.
-- `INVALID_CONFIG` - A feature-specific constraint is violated (e.g., FMC
-  field set when FMC is not enabled).
 
 ### SNP_COMMIT (Command ID: 0x068)
 
@@ -64,16 +60,18 @@ to any previously committed version.
 
 **Input/Output Parameters:** None.
 
-**Behavior:**
-- Commits the current firmware version **and** the current microcode patch
-  level. Sets `CommittedVersion` equal to `CurrentVersion` and `CommittedTcb`
-  to `CurrentTcb` (including the MICROCODE field).
-- After commit, the firmware will refuse to load any firmware image with a
-  version less than the newly committed version.
-- This operation is **irreversible**. There is no way to roll back after commit.
+**Behavior (ABI Section 8.3, page 75):**
+1. Sets `CommittedTcb` to `CurrentTcb`.
+2. Sets `CommittedVersion` to the `FirmwareVersion` of the current firmware.
+3. Sets `ReportedTcb` to `CurrentTcb` (clearing any override set by SNP_CONFIG).
+4. Deletes the VLEK hashstick if `ReportedTcb` changed as a result.
 
-**Error Conditions:**
-- `INVALID_PLATFORM_STATE` - Platform is not in INIT state.
+After commit, the firmware will refuse to load any firmware image with a
+version less than the newly committed version. This operation is
+**irreversible**. There is no way to roll back after commit.
+
+**Error Conditions (Table 43):**
+- None. The ABI spec only defines `SUCCESS` for this command.
 
 ### Related Command: SNP_CONFIG_EX (Command ID: 0x06Ch)
 
@@ -110,7 +108,9 @@ The firmware tracks multiple TCB versions simultaneously:
 - **CommittedTcb**: The minimum TCB that has been committed. Firmware with a
   lower TCB than this cannot be loaded.
 - **ReportedTcb**: The TCB reported in attestation reports and used for VCEK
-  derivation. Defaults to `CurrentTcb` but can be overridden via `SNP_CONFIG`.
+  derivation. Can be overridden via `SNP_CONFIG`. Resets to `CommittedTcb` when
+  `SNP_CONFIG` is called with a zero `REPORTED_TCB`, or to `CurrentTcb` when
+  `SNP_COMMIT` is called.
 - **LaunchTcb**: The TCB value at the time `SNP_INIT` was called. Unlike
   `CurrentTcb`, this value does not change during live firmware updates,
   providing a stable reference for the TCB at platform initialization time.
@@ -229,7 +229,7 @@ snphost config set <BOOTLOADER> <TEE> <SNP-FW> <MICROCODE> <MASK-CHIP> [FMC]
 
 - Parameters are positional: bootloader SVN, TEE SVN, SNP firmware SVN,
   microcode SVN, mask-chip value (0-3), and optionally FMC SVN (Turin+).
-- Values can only be set to equal or lower versions than current.
+- TCB values can only be set to equal or lower versions than committed.
 - Changes the Reported TCB immediately but does **not** change Platform TCB.
 - Mask-chip value is a 2-bit field:
   - Bit 0: `MASK_CHIP_ID` (0=disabled, 1=enabled)
@@ -243,7 +243,8 @@ snphost commit
 
 - Permanently commits the current firmware version and TCB.
 - Prevents rollback to any previous firmware version.
-- Resets Reported TCB to match Current TCB.
+- Resets `ReportedTcb` to `CurrentTcb`.
+- Deletes the VLEK hashstick if `ReportedTcb` changed.
 - **This is irreversible.**
 
 ### Resetting Uncommitted Changes
@@ -308,8 +309,9 @@ The attestation report contains several TCB-related fields, each serving a
 different verification purpose:
 
 - **REPORTED_TCB**: The TCB version set by the hypervisor via `SNP_CONFIG`
-  (defaults to `CurrentTcb` if not overridden). This is the TCB used for VCEK
-  derivation and is the version the hypervisor vouches for.
+  (resets to `CommittedTcb` if zeroed, or to `CurrentTcb` on `SNP_COMMIT`).
+  This is the TCB used for VCEK derivation and is the version the hypervisor
+  vouches for.
 - **COMMITTED_TCB**: The minimum committed TCB. A verifier should check:
   *"Does this TCB address all the vulnerabilities I care about?"* If
   `COMMITTED_TCB` is too low, the platform may be vulnerable to rollback.
@@ -379,10 +381,11 @@ transitions.
 
 1. After `config set`: Reported TCB should match the configured values.
 2. After `config set`: Platform TCB should remain unchanged.
-3. After `config reset`: Reported TCB should revert to Platform TCB.
-4. After `commit`: Committed TCB should equal Current TCB.
+3. After `config reset`: Reported TCB should revert to Committed TCB.
+4. After `commit`: Committed TCB should equal Current TCB, Reported TCB should
+   equal Current TCB.
 5. Attestation reports should reflect the Reported TCB, not Current TCB.
-6. Setting TCB values higher than current should fail.
+6. Setting TCB values higher than committed should fail with INVALID_PARAM.
 
 ---
 

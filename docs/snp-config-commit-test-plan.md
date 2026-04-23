@@ -84,41 +84,40 @@ Key design decisions:
 
 ### Test 2: Config Set with Lower Values (Verify Reported TCB Changes)
 
-**Command:** `snphost config set <current_bl - 1> <current_tee> <current_snp> <current_ucode> 0`
+**Command:** `snphost config set <committed_bl - 1> <committed_tee> <committed_snp> <committed_ucode> 0`
 
 **Purpose:** Verify that `config set` actually changes the Reported TCB. By
-setting the bootloader SVN one version lower than the current Platform TCB, we
-can confirm the Reported TCB diverges from the Platform TCB. The `0` mask-chip
+setting the bootloader SVN one version lower than the Committed TCB, we can
+confirm the Reported TCB diverges from the Committed TCB. The `0` mask-chip
 value leaves MASK_CHIP_ID and MASK_CHIP_KEY both disabled.
 
 If the current bootloader SVN is 0 (cannot be decremented), the test should
 try decrementing a different field (e.g., SNP firmware SVN). The key requirement
-is that at least one field is set lower than the current value.
+is that at least one field is set lower than the committed value.
 
 This test validates the invariant `ReportedTcb <= CommittedTcb <= CurrentTcb`.
-The hypervisor can set Reported TCB to any value at or below Current TCB,
-allowing it to hide provisional firmware updates from guests during rollout.
+The ABI enforces that REPORTED_TCB must be <= CommittedTcb (not CurrentTcb).
 
 **Verification:**
 - Command exits with status 0.
-- `snphost show tcb` confirms Reported TCB **differs** from Platform TCB.
+- `snphost show tcb` confirms Reported TCB **differs** from Committed TCB.
 - The decremented field in Reported TCB matches the value that was set.
-- Platform TCB remains unchanged.
+- Committed and Platform TCB remain unchanged.
 
 ### Test 3: Config Reset (Verify Reported TCB Restores)
 
 **Command:** `snphost config reset`
 
 **Purpose:** Verify that config reset restores the Reported TCB back to match
-the Platform TCB, undoing the change from Test 2.
+the Committed TCB, undoing the change from Test 2.
 
 **Verification:**
 - Command exits with status 0.
-- `snphost show tcb` confirms Reported TCB matches Platform TCB again.
+- `snphost show tcb` confirms Reported TCB matches Committed TCB again.
 
 ### Test 4: Config Set with MASK_CHIP_ID Enabled
 
-**Command:** `snphost config set <current_bl> <current_tee> <current_snp> <current_ucode> 1`
+**Command:** `snphost config set <committed_bl> <committed_tee> <committed_snp> <committed_ucode> 1`
 
 **Purpose:** Verify that the mask-chip parameter correctly sets MASK_CHIP_ID.
 Value 1 enables MASK_CHIP_ID (hides chip ID in attestation reports) while
@@ -133,7 +132,7 @@ in cloud environments by hiding the physical chip identifier.
 
 ### Test 5: Config Set with MASK_CHIP_KEY Enabled
 
-**Command:** `snphost config set <current_bl> <current_tee> <current_snp> <current_ucode> 2`
+**Command:** `snphost config set <committed_bl> <committed_tee> <committed_snp> <committed_ucode> 2`
 
 **Purpose:** Verify that the mask-chip parameter correctly sets MASK_CHIP_KEY.
 Value 2 leaves MASK_CHIP_ID disabled (chip ID visible) but enables MASK_CHIP_KEY
@@ -148,7 +147,7 @@ keys and want to ensure no chip-specific key material is used.
 
 ### Test 6: Config Set with Both Masks Enabled
 
-**Command:** `snphost config set <current_bl> <current_tee> <current_snp> <current_ucode> 3`
+**Command:** `snphost config set <committed_bl> <committed_tee> <committed_snp> <committed_ucode> 3`
 
 **Purpose:** Verify that the mask-chip parameter correctly sets both MASK_CHIP_ID
 and MASK_CHIP_KEY simultaneously. Value 3 enables both masks (chip ID hidden AND
