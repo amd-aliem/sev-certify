@@ -50,7 +50,7 @@ Total structure size: 1024 bytes (0x400).
 
 **Error Conditions:**
 - `INVALID_LENGTH` - Input buffer too small.
-- `INVALID_STATE` - Platform is not in INIT state.
+- `INVALID_PLATFORM_STATE` - Platform is not in INIT state.
 - `INVALID_PARAM` - Any field of `REPORTED_TCB` exceeds `CurrentTcb`.
 - `INVALID_CONFIG` - A feature-specific constraint is violated (e.g., FMC
   field set when FMC is not enabled).
@@ -73,7 +73,7 @@ to any previously committed version.
 - This operation is **irreversible**. There is no way to roll back after commit.
 
 **Error Conditions:**
-- `INVALID_STATE` - Platform is not in INIT state.
+- `INVALID_PLATFORM_STATE` - Platform is not in INIT state.
 
 ### Related Command: SNP_CONFIG_EX (Command ID: 0x06Ch)
 
@@ -122,8 +122,8 @@ The SNP platform has two states relevant to config/commit:
 1. **UNINIT**: Platform is uninitialized. Must call `SNP_INIT` or
    `SNP_INIT_EX` to move to INIT.
 2. **INIT**: Platform is initialized. `SNP_CONFIG` and `SNP_COMMIT` are valid
-   in this state only when there are no active guests (guest context count is
-   zero). If guests are running, these commands will return `INVALID_STATE`.
+   in this state. The ABI spec does not impose a guest count restriction on
+   either command - they can be called while guests are running.
 
 ### MASK_CHIP_ID and MASK_CHIP_KEY Use Cases
 

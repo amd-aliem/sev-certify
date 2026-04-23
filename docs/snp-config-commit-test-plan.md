@@ -15,9 +15,10 @@ launch. They exercise the `snphost` CLI tool's `show tcb`, `config set`,
 `config reset`, and `commit` subcommands against the platform's SEV-SNP firmware
 via `/dev/sev`.
 
-Because `SNP_CONFIG` and `SNP_COMMIT` require the platform to be in the INIT
-state with no active guests, these tests must complete before `launch.target`
-begins spawning guests.
+`SNP_CONFIG` and `SNP_COMMIT` require the platform to be in the INIT state but
+do not impose a guest count restriction - they can be called while guests are
+running. The tests are placed in the system stage for logical ordering (platform
+configuration before guest launch), not due to an ABI constraint.
 
 ---
 
@@ -285,8 +286,9 @@ This is out of scope for the initial test implementation.
    where firmware is not expected to be rolled back.
 
 2. **Platform state requirements**: Config and commit commands require the
-   platform to be in INIT state with no active guests. The service ordering
-   (before `system-done.service` and `launch.target`) ensures this.
+   platform to be in INIT state. The ABI spec does not restrict these commands
+   based on guest count, so they can be called while guests are running.
+   The tests are placed before guest launch for logical ordering.
 
 3. **snphost availability**: The `snphost` binary is already downloaded and
    installed by `modules/build/host/snphost/`. No additional build changes
