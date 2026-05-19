@@ -86,13 +86,14 @@ as needed, executes steps, and collects results.
   │  ┌─────────────────────────────────────────────────────┐               │
   │  │              TESTING HARNESS (sev_certify)          │               │
   │  │                                                     │               │
-  │  │  1. Load CertificationDefinition from TOML          │               │
+  │  │  1. Load manifest from TOML                         │               │
   │  │  2. For each TestDefinition:                        │               │
-  │  │     a. If requires_vm: launch_guest(vm_profile)     │──────┐        │
-  │  │     b. Execute host steps                           │      │        │
-  │  │     c. Execute guest steps (via serial)             │      │        │
-  │  │     d. Collect StepResults                          │      │        │
-  │  │     e. If requires_vm: teardown_guest()             │      │        │
+  │  │     a. Import test module, call steps()             │               │
+  │  │     b. If requires_vm: launch_guest(vm_profile)     │──────┐        │
+  │  │     c. Execute host steps                           │      │        │
+  │  │     d. Execute guest steps (via serial)             │      │        │
+  │  │     e. Collect StepResults                          │      │        │
+  │  │     f. If requires_vm: teardown_guest()             │      │        │
   │  │  3. Aggregate into CertificationResult              │      │        │
   │  │  4. Write report                                    │      │        │
   │  └─────────────────────────────────────────────────────┘      │        │
@@ -130,7 +131,7 @@ as needed, executes steps, and collects results.
 | Execution count | Once per boot | Repeatable without reboot |
 | Guest launch | Fixed pipeline stage | Callable module per-test |
 | VM configuration | Hardcoded single QEMU command | Parameterized by VMProfile |
-| Test definitions | Implicit in systemd service ordering | Explicit TOML files |
+| Test definitions | Implicit in systemd service ordering | TOML manifest + per-test Python modules |
 | Host-guest comm | Journal upload (one-shot) | Serial console (dedicated) |
 | Result collection | Journal + certificate generator | Structured JSON per step |
 | Host-only tests | Require `host-test.target` insertion | Just steps with `runs_on: host` |
@@ -150,6 +151,7 @@ CertificationDefinition
 ├── completed_at: timestamp | null
 ├── tests[]: TestDefinition
 │   ├── name: string                   "attestation-workflow"
+│   ├── module: string                 "tests.attestation_workflow"
 │   ├── scope: host | guest | mixed    determines VM requirement
 │   ├── requires_vm: bool              derived from scope ≠ host
 │   ├── vm_profile: string | null      key into [vm_profiles] table
@@ -157,7 +159,7 @@ CertificationDefinition
 │   ├── started_at: timestamp | null
 │   ├── completed_at: timestamp | null
 │   │
-│   └── steps[]: Step
+│   └── steps[]: Step                  (populated by module at runtime)
 │       ├── name: string               "generate-report"
 │       ├── type: setup | required | info
 │       ├── runs_on: host | guest
@@ -194,16 +196,32 @@ command, expected_result) and the result fields (result, exit_code, stdout).
 2. **Result fields start null** -- before execution, result fields are null/empty.
    After execution, they are filled in. The struct is self-documenting about
    whether a step has run.
-3. **Simpler code** -- the harness reads the definition, executes it, writes
-   results into the same structure, and serializes it. No mapping between
-   definition IDs and result IDs.
+3. **Simpler code** -- the harness imports the test module, calls `steps()` to
+   get the step list, executes them, writes results into the same structures,
+   and serializes. No mapping between definition IDs and result IDs.
 4. **Precedent** -- test frameworks (JUnit XML, TAP, pytest JSON) commonly
    combine test identity with test outcome in a single record.
 
-The one downside is that the input TOML (pure definition) and the output JSON
-(definition + results) have different shapes. This is acceptable: the TOML is
-the *input format* and the JSON is the *output format*. The harness reads TOML,
-hydrates the structs, executes, fills in results, and writes JSON.
+### Decision: Steps Defined in Python, Not TOML
+
+**Decision**: The TOML file declares *which* tests to run and their metadata
+(name, scope, vm_profile). The *steps* for each test are defined in a Python
+module referenced by the `module` field.
+
+**Rationale**:
+
+1. **TOML stays clean** -- the certification file is a short manifest, not a
+   wall of `[[tests.steps]]` arrays with repeated boilerplate fields.
+2. **Steps are code** -- step definitions benefit from variables, loops, helper
+   functions, and imports. Multi-line shell commands embedded in TOML strings
+   are unreadable and hard to maintain.
+3. **Reuse** -- common step patterns (e.g., "run snpguest report then verify")
+   can be shared across tests as plain Python functions.
+4. **Type safety** -- the shared `models.py` provides `Step` as a dataclass.
+   Test modules construct `Step` objects directly with IDE autocomplete and
+   static analysis support.
+5. **Per-test isolation** -- each test's logic lives in its own file. Adding a
+   new test means adding one Python file and one `[[tests]]` entry in TOML.
 
 ### Field-Level Detail
 
@@ -224,10 +242,11 @@ hydrates the structs, executes, fills in results, and writes JSON.
 | Field | Type | Source | Description |
 |---|---|---|---|
 | `name` | string | TOML | Unique test identifier |
+| `module` | string | TOML | Dotted Python module path (e.g., `"tests.snphost_ok"`). The module must export a `steps()` function returning `list[Step]`. |
 | `scope` | enum | TOML | `host`, `guest`, or `mixed` |
 | `requires_vm` | bool | Derived | `true` if scope is `guest` or `mixed` |
 | `vm_profile` | string? | TOML | Key into `vm_profiles` table; required if `requires_vm` |
-| `steps` | Step[] | TOML | Ordered list of steps |
+| `steps` | Step[] | Module | Ordered list of steps, populated by calling `module.steps()` |
 | `result` | enum | Runtime | pass if all required steps pass, fail if any required step fails |
 | `started_at` | ISO 8601 | Runtime | When the test started |
 | `completed_at` | ISO 8601 | Runtime | When the test finished |
@@ -236,12 +255,12 @@ hydrates the structs, executes, fills in results, and writes JSON.
 
 | Field | Type | Source | Description |
 |---|---|---|---|
-| `name` | string | TOML | Step identifier, unique within test |
-| `type` | enum | TOML | `setup` (must pass, not scored), `required` (must pass for test to pass), `info` (logged but does not affect pass/fail) |
-| `runs_on` | enum | TOML | `host` or `guest` |
-| `command` | string | TOML | Shell command to execute |
-| `expected_result` | string | TOML | Validation expression (e.g., `"exit_code:0"`, `"stdout_contains:PASS"`) |
-| `timeout` | int | TOML | Max seconds before killing the step |
+| `name` | string | Module | Step identifier, unique within test |
+| `type` | enum | Module | `setup` (must pass, not scored), `required` (must pass for test to pass), `info` (logged but does not affect pass/fail) |
+| `runs_on` | enum | Module | `host` or `guest` |
+| `command` | string | Module | Shell command to execute |
+| `expected_result` | string | Module | Validation expression (e.g., `"exit_code:0"`, `"stdout_contains:PASS"`) |
+| `timeout` | int | Module | Max seconds before killing the step |
 | `result` | enum | Runtime | `pass`, `fail`, `error`, `skip`, null before run |
 | `exit_code` | int? | Runtime | Process exit code |
 | `stdout` | string? | Runtime | Captured stdout (truncated to 64KB) |
@@ -267,14 +286,19 @@ hydrates the structs, executes, fills in results, and writes JSON.
 
 ## 4. Serialization Format
 
-**Decision**: TOML for input definitions, JSON for output results.
+**Decision**: TOML for certification manifests, Python for test definitions, JSON
+for output results.
 
 **Rationale**:
 
-- **TOML for definitions** -- human-authored, needs comments, hierarchical but
-  not deeply nested. TOML handles `[[tests]]` and `[[tests.steps]]` arrays
-  cleanly. Preferred over YAML (fewer gotchas with string quoting, booleans) and
-  over JSON (no comments, verbose).
+- **TOML for manifests** -- the certification file is a short, human-authored
+  manifest declaring which tests to run and their VM profiles. TOML handles
+  `[[tests]]` arrays and `[vm_profiles.*]` tables cleanly. No step definitions
+  live here, so the files stay short.
+- **Python for test definitions** -- each test module constructs `Step` objects
+  using the shared `models.py` types. This gives full language features
+  (variables, loops, helpers) and eliminates the readability problems of
+  embedding multi-line shell commands in TOML strings.
 - **JSON for results** -- machine-generated, consumed by reporting tools, no
   need for comments. JSON is the lingua franca for structured output.
 
@@ -593,8 +617,8 @@ Single test execution from the harness perspective:
 
 ```
                     ┌──────────────────────────────────┐
-                    │  Read CertificationDefinition    │
-                    │  from TOML file                  │
+                    │  Read manifest from TOML         │
+                    │  Import test modules             │
                     └───────────────┬──────────────────┘
                                     │
                     ┌───────────────▼──────────────────┐
@@ -728,10 +752,13 @@ WantedBy=multi-user.target
 
 ## 10. Example Test Definitions
 
-### Example 1: Host-Only -- snphost-ok Checks
+### Certification Manifest
+
+The TOML file is a short manifest. Steps are not declared here -- each test
+references a Python module that defines them.
 
 ```toml
-# certifications/3.0.0-0.toml (excerpt)
+# certifications/3.0.0-0.toml
 
 version = "3.0.0-0"
 description = "SEV-SNP Attestation - Level 3.0.0-0"
@@ -744,144 +771,179 @@ serial_port = 4444
 policy      = "0x30000"
 guest_visible_workarounds = "0x0"
 author_key_enabled = false
-host_data  = "auto_measurement"
-
-# ── Host-only test: verify SNP platform is enabled ──
+host_data   = "auto_measurement"
 
 [[tests]]
-name        = "snphost-ok"
-scope       = "host"
-vm_profile  = ""
-
-  [[tests.steps]]
-  name            = "snphost-ok"
-  type            = "required"
-  runs_on         = "host"
-  command         = "snphost ok"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  [[tests.steps]]
-  name            = "snphost-show-guests"
-  type            = "info"
-  runs_on         = "host"
-  command         = "snphost show guests"
-  expected_result = "exit_code:0"
-  timeout         = 10
-```
-
-### Example 2: Mixed Host+Guest -- Attestation Workflow
-
-```toml
-# certifications/3.0.0-0.toml (continued)
+name   = "snphost-ok"
+module = "tests.snphost_ok"
+scope  = "host"
 
 [[tests]]
-name        = "attestation-workflow"
-scope       = "mixed"
-vm_profile  = "default"
-
-  # Host step: verify SNP is ready before launching guest
-  [[tests.steps]]
-  name            = "pre-check-snp"
-  type            = "setup"
-  runs_on         = "host"
-  command         = "snphost ok"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  # Guest step: generate attestation report
-  [[tests.steps]]
-  name            = "generate-attestation-report"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest report /tmp/attestation-report.bin /tmp/random-request-data.bin --random"
-  expected_result = "exit_code:0"
-  timeout         = 60
-
-  # Guest step: fetch CA certificate chain
-  [[tests.steps]]
-  name            = "fetch-ca-certs"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest fetch ca pem -r /tmp/attestation-report.bin /tmp/certificates"
-  expected_result = "exit_code:0"
-  timeout         = 60
-
-  # Guest step: fetch VCEK certificate
-  [[tests.steps]]
-  name            = "fetch-vcek"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest fetch vcek pem /tmp/certificates/ /tmp/attestation-report.bin"
-  expected_result = "exit_code:0"
-  timeout         = 60
-
-  # Guest step: verify certificate chain
-  [[tests.steps]]
-  name            = "verify-cert-chain"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest verify certs /tmp/certificates/"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  # Guest step: verify attestation report against certificates
-  [[tests.steps]]
-  name            = "verify-attestation-report"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest verify attestation /tmp/certificates/ /tmp/attestation-report.bin"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  # Guest step: display report for host-side validation
-  [[tests.steps]]
-  name            = "display-attestation-report"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest display report /tmp/attestation-report.bin"
-  expected_result = "exit_code:0"
-  timeout         = 10
-
-  # Guest step: validate request data matches report
-  [[tests.steps]]
-  name            = "validate-request-data"
-  type            = "required"
-  runs_on         = "guest"
-  command         = """
-    random=$(xxd -p -c 0 /tmp/random-request-data.bin | tr '[:upper:]' '[:lower:]')
-    report=$(snpguest display report /tmp/attestation-report.bin \
-      | tr '\\n' ' ' \
-      | sed 's|.*Report Data:\\(.*\\)Measurement.*|\\1|' \
-      | sed 's| ||g' \
-      | tr '[:upper:]' '[:lower:]')
-    [ "$random" = "$report" ]
-  """
-  expected_result = "exit_code:0"
-  timeout         = 10
-
-  # Guest step: validate measurement attribute
-  [[tests.steps]]
-  name            = "validate-measurement"
-  type            = "required"
-  runs_on         = "guest"
-  command         = """
-    expected=$(snpguest display report /tmp/attestation-report.bin \
-      | tr '\\n' ' ' \
-      | sed 's|.*Host Data:\\(.*\\)ID Key Digest:.*|\\1|' \
-      | sed 's| ||g' \
-      | tr '[:upper:]' '[:lower:]')
-    actual=$(snpguest display report /tmp/attestation-report.bin \
-      | tr '\\n' ' ' \
-      | sed 's|.*Measurement:\\(.*\\)Host Data.*|\\1|' \
-      | sed 's| ||g' \
-      | tr '[:upper:]' '[:lower:]' \
-      | sha256sum | cut -d ' ' -f 1)
-    [ "$expected" = "$actual" ]
-  """
-  expected_result = "exit_code:0"
-  timeout         = 10
+name       = "attestation-workflow"
+module     = "tests.attestation_workflow"
+scope      = "mixed"
+vm_profile = "default"
 ```
+
+### Example 1: Host-Only Test Module
+
+```python
+# tests/snphost_ok.py
+
+from sev_certify.models import Step
+
+def steps() -> list[Step]:
+    return [
+        Step(
+            name="snphost-ok",
+            type="required",
+            runs_on="host",
+            command="snphost ok",
+            expected_result="exit_code:0",
+            timeout=30,
+        ),
+        Step(
+            name="snphost-show-guests",
+            type="info",
+            runs_on="host",
+            command="snphost show guests",
+            expected_result="exit_code:0",
+            timeout=10,
+        ),
+    ]
+```
+
+### Example 2: Mixed Host+Guest Test Module
+
+```python
+# tests/attestation_workflow.py
+
+from sev_certify.models import Step
+
+REPORT_BIN = "/tmp/attestation-report.bin"
+REQUEST_DATA = "/tmp/random-request-data.bin"
+CERTS_DIR = "/tmp/certificates"
+
+
+def steps() -> list[Step]:
+    return [
+        # Host step: verify SNP is ready before launching guest
+        Step(
+            name="pre-check-snp",
+            type="setup",
+            runs_on="host",
+            command="snphost ok",
+            expected_result="exit_code:0",
+            timeout=30,
+        ),
+        # Guest step: generate attestation report
+        Step(
+            name="generate-attestation-report",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest report {REPORT_BIN} {REQUEST_DATA} --random",
+            expected_result="exit_code:0",
+            timeout=60,
+        ),
+        # Guest step: fetch CA certificate chain
+        Step(
+            name="fetch-ca-certs",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest fetch ca pem -r {REPORT_BIN} {CERTS_DIR}",
+            expected_result="exit_code:0",
+            timeout=60,
+        ),
+        # Guest step: fetch VCEK certificate
+        Step(
+            name="fetch-vcek",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest fetch vcek pem {CERTS_DIR}/ {REPORT_BIN}",
+            expected_result="exit_code:0",
+            timeout=60,
+        ),
+        # Guest step: verify certificate chain
+        Step(
+            name="verify-cert-chain",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest verify certs {CERTS_DIR}/",
+            expected_result="exit_code:0",
+            timeout=30,
+        ),
+        # Guest step: verify attestation report
+        Step(
+            name="verify-attestation-report",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest verify attestation {CERTS_DIR}/ {REPORT_BIN}",
+            expected_result="exit_code:0",
+            timeout=30,
+        ),
+        # Guest step: display report for host-side validation
+        Step(
+            name="display-attestation-report",
+            type="required",
+            runs_on="guest",
+            command=f"snpguest display report {REPORT_BIN}",
+            expected_result="exit_code:0",
+            timeout=10,
+        ),
+        # Guest step: validate request data matches report
+        Step(
+            name="validate-request-data",
+            type="required",
+            runs_on="guest",
+            command=_validate_request_data_cmd(),
+            expected_result="exit_code:0",
+            timeout=10,
+        ),
+        # Guest step: validate measurement attribute
+        Step(
+            name="validate-measurement",
+            type="required",
+            runs_on="guest",
+            command=_validate_measurement_cmd(),
+            expected_result="exit_code:0",
+            timeout=10,
+        ),
+    ]
+
+
+def _validate_request_data_cmd() -> str:
+    """Compare random request data against report's Report Data field."""
+    return f"""\
+random=$(xxd -p -c 0 {REQUEST_DATA} | tr '[:upper:]' '[:lower:]')
+report=$(snpguest display report {REPORT_BIN} \
+  | tr '\\n' ' ' \
+  | sed 's|.*Report Data:\\(.*\\)Measurement.*|\\1|' \
+  | sed 's| ||g' \
+  | tr '[:upper:]' '[:lower:]')
+[ "$random" = "$report" ]"""
+
+
+def _validate_measurement_cmd() -> str:
+    """Verify host-data matches sha256 of measurement."""
+    return f"""\
+expected=$(snpguest display report {REPORT_BIN} \
+  | tr '\\n' ' ' \
+  | sed 's|.*Host Data:\\(.*\\)ID Key Digest:.*|\\1|' \
+  | sed 's| ||g' \
+  | tr '[:upper:]' '[:lower:]')
+actual=$(snpguest display report {REPORT_BIN} \
+  | tr '\\n' ' ' \
+  | sed 's|.*Measurement:\\(.*\\)Host Data.*|\\1|' \
+  | sed 's| ||g' \
+  | tr '[:upper:]' '[:lower:]' \
+  | sha256sum | cut -d ' ' -f 1)
+[ "$expected" = "$actual" ]"""
+```
+
+Note how Python eliminates the problems with inline TOML steps:
+- Shared constants (`REPORT_BIN`, `CERTS_DIR`) avoid path duplication.
+- Multi-line shell commands live in helper functions, not triple-quoted TOML.
+- Adding a step is adding one `Step(...)` call -- no boilerplate field names.
 
 ---
 
@@ -904,83 +966,18 @@ implement both.
 
 ## 12. Example Input and Output
 
-### Input: `certifications/3.0.0-0.toml` (abbreviated)
+### Input
 
-```toml
-version = "3.0.0-0"
-description = "SEV-SNP Attestation - Level 3.0.0-0"
+Two files participate: the TOML manifest and the test module it references.
+The TOML manifest is the same as shown in Section 10. The test modules are
+`tests/snphost_ok.py` and `tests/attestation_workflow.py` (also shown above).
 
-[vm_profiles.default]
-image_path  = "/usr/local/lib/guest-image/guest.efi"
-ovmf_path   = "/usr/share/ovmf/OVMF.amdsev.fd"
-memory      = "2048M"
-serial_port = 4444
-policy      = "0x30000"
-guest_visible_workarounds = "0x0"
-author_key_enabled = false
-host_data   = "auto_measurement"
-
-[[tests]]
-name   = "snphost-ok"
-scope  = "host"
-
-  [[tests.steps]]
-  name            = "snphost-ok"
-  type            = "required"
-  runs_on         = "host"
-  command         = "snphost ok"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  [[tests.steps]]
-  name            = "snphost-show-guests"
-  type            = "info"
-  runs_on         = "host"
-  command         = "snphost show guests"
-  expected_result = "exit_code:0"
-  timeout         = 10
-
-[[tests]]
-name       = "attestation-workflow"
-scope      = "mixed"
-vm_profile = "default"
-
-  [[tests.steps]]
-  name            = "pre-check-snp"
-  type            = "setup"
-  runs_on         = "host"
-  command         = "snphost ok"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  # ── VM launched here (before first guest step) ──
-
-  [[tests.steps]]
-  name            = "generate-attestation-report"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest report /tmp/r.bin /tmp/rng.bin --random"
-  expected_result = "exit_code:0"
-  timeout         = 60
-
-  [[tests.steps]]
-  name            = "verify-cert-chain"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest verify certs /tmp/certificates/"
-  expected_result = "exit_code:0"
-  timeout         = 30
-
-  [[tests.steps]]
-  name            = "display-report"
-  type            = "required"
-  runs_on         = "guest"
-  command         = "snpguest display report /tmp/r.bin"
-  expected_result = "exit_code:0"
-  timeout         = 10
-
-  # ── VM torn down here (after last guest step) ──
-```
+At runtime the harness:
+1. Reads the TOML manifest.
+2. For each `[[tests]]` entry, imports the `module` and calls `steps()`.
+3. Populates `TestDefinition.steps` with the returned `Step` list.
+4. Executes the steps (launching/tearing down VMs as needed).
+5. Writes the combined definition + results as JSON.
 
 ### Output: `results/3.0.0-0-2026-05-18T12:00:00Z.json`
 
@@ -1009,6 +1006,7 @@ produces:
   "tests": [
     {
       "name": "snphost-ok",
+      "module": "tests.snphost_ok",
       "scope": "host",
       "requires_vm": false,
       "vm_profile": null,
@@ -1046,6 +1044,7 @@ produces:
     },
     {
       "name": "attestation-workflow",
+      "module": "tests.attestation_workflow",
       "scope": "mixed",
       "requires_vm": true,
       "vm_profile": "default",
@@ -1120,15 +1119,21 @@ read JSON instead of journal entries) or by CI systems.
 
 ```
 sev-certify/
-├── certifications/              # Test definition TOML files
+├── certifications/              # TOML manifests (what to run)
 │   ├── 3.0.0-0.toml
 │   └── 3.0.0-1.toml
-├── sev_certify/                 # Python package
+├── tests/                       # Per-test Python modules (how to run)
+│   ├── __init__.py
+│   ├── snphost_ok.py            # steps() for snphost-ok test
+│   ├── attestation_workflow.py  # steps() for attestation-workflow test
+│   ├── snphost_config.py        # steps() for snphost config/commit test
+│   └── ...
+├── sev_certify/                 # Harness package (shared library)
 │   ├── __init__.py
 │   ├── __main__.py              # Entry point (python3 -m sev_certify)
-│   ├── models.py                # CertificationDefinition, TestDefinition, Step, VMProfile
+│   ├── models.py                # Step, TestDefinition, VMProfile, etc.
 │   ├── guest.py                 # GuestVM class (launch, exec, teardown)
-│   ├── runner.py                # Test execution engine
+│   ├── runner.py                # Test execution engine (imports test modules)
 │   └── report.py                # Result formatting (JSON, human-readable)
 ├── results/                     # Output directory (gitignored)
 │   └── 3.0.0-0-2026-05-18T12:00:00Z.json
@@ -1150,10 +1155,11 @@ sev-certify/
    (Python 3.11+) for TOML parsing and `subprocess` for command execution.
    No external packages are required. Host images need Python 3.11+.
 
-2. **Step output cross-referencing** -- the `validate-measurement` step in the
-   attestation example needs output from a previous step. Currently each step
-   re-runs commands to extract data. A future enhancement could pass step
-   outputs as environment variables to subsequent steps.
+2. **Step output cross-referencing** -- the `validate-measurement` step needs
+   output from a previous step. Currently each step re-runs commands to
+   extract data. Since test modules are Python, a future enhancement could
+   use a shared context dict passed to `steps()` or use a callback-based
+   step that receives prior results.
 
 3. **Parallel step execution** -- all steps currently run sequentially. Parallel
    host steps could speed up host-only suites but adds complexity. Not needed
@@ -1165,3 +1171,8 @@ sev-certify/
 
 5. **CI integration** -- the harness JSON output can be converted to JUnit XML
    for CI systems. This is a straightforward post-processing step.
+
+6. **Test module discovery** -- currently test modules are explicitly listed via
+   `module` in TOML. A future option is auto-discovery (scan `tests/` for
+   modules matching a naming convention), but explicit listing is preferred
+   for now since certification order matters.
