@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, get_args
 
 
-# ── Definition models (loaded from TOML manifests) ──────────────
+# Single source of truth for the enum values
+StepType = Literal["setup", "required", "info"]
+RunsOn = Literal["host", "guest"]
+Scope = Literal["host", "guest", "mixed"]
 
 
 @dataclass
@@ -14,11 +17,31 @@ class Step:
     """A single executable step within a test."""
 
     name: str
-    type: Literal["setup", "required", "info"]
-    runs_on: Literal["host", "guest"]
+    type: StepType
+    runs_on: RunsOn
     command: str
     expected_result: str  # e.g. "exit_code:0", "stdout_contains:PASS"
     timeout: int = 60
+
+    def __post_init__(self) -> None:
+        if not self.name: 
+            raise ValueError("Step.name must not be empty")
+        if not self.command:
+            raise ValueError(f"Step {self.name!r}: command must not be empty")
+        if self.type not in get_args(StepType):
+            raise ValueError(
+                    f"Step {self.name!r}: invalid type {self.type!r}; "
+                    f"expected one of {get_args(StepType)}"
+                    )
+        if self.runs_on not in get_args(RunsOn):
+            raise ValueError(
+                    f"Step {self.name!r}: invalid runs_on {self.runs_on!r}; "
+                    f"expected one of {get_args(RunsOn)}"
+                    )
+        if self.timeout <= 0:
+            raise ValueError(
+                    f"Step {self.name!r}: timeout must be positive, got {self.timeout}"
+                    )
 
 
 @dataclass
@@ -27,7 +50,18 @@ class TestDefinition:
 
     name: str
     module: str  # dotted module path, e.g. "cert_tests.common.snphost_ok"
-    scope: Literal["host", "guest", "mixed"]
+    scope: Scope
+
+    def __post_init__(self) -> None: 
+        if not self.name:
+            raise ValueError("TestDefinition.name must not be empty")
+        if not self.module: 
+            raise ValueError(f"TestDefinition {self.name!r}: module must not be empty")
+        if self.scope not in get_args(Scope):
+            raise ValueError(
+                    f"TestDefinition {self.name!r}: invalid scope {self.scope!r}; "
+                    f"expected one of {get_args(Scope)}"
+                    )
 
     @property
     def requires_vm(self) -> bool:
@@ -41,6 +75,10 @@ class CertificationDefinition:
     version: str
     description: str
     tests: list[TestDefinition] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.version:
+            raise ValueError("CertificationDefinition.version must not be empty")
 
 
 # ── Runtime result models (populated during execution) ──────────

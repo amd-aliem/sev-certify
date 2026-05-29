@@ -32,19 +32,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def load_manifest(toml_path: Path) -> CertificationDefinition:
-    """Load a TOML certification manifest into a CertificationDefinition."""
-    with open(toml_path, "rb") as f:
-        data = tomllib.load(f)
-
+    """Load and validate a TOML certification manifest."""
     try:
-        tests = [TestDefinition(**t) for t in data.get("tests", [])]
-        return CertificationDefinition(
-            version=data["version"],
-            description=data["description"],
-            tests=tests,
-        )
-    except (KeyError, TypeError) as exc:
-        raise ValueError(f"Invalid manifest {toml_path}: {exc}") from exc
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+    except OSError as exc:
+        raise ValueError(f"Cannot read manifest {toml_path}: {exc}") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"Malformed TOML in {toml_path}: {exc}") from exc
+
+    for key in ("version", "description"):
+        if key not in data:
+            raise ValueError(f"{toml_path}: missing required key {key!r}")
+
+    raw_tests = data.get("tests", [])
+    if not isinstance(raw_tests, list):
+        raise ValueError(f"{toml_path}: 'tests' must be an array of tables")
+
+    tests: list[TestDefinition] = []
+    for i, entry in enumerate(raw_tests):
+        if not isinstance(entry, dict):
+            raise ValueError(f"{toml_path}: tests[{i}] must be a table")
+        try:
+            tests.append(TestDefinition(**entry))
+        except TypeError as exc:
+            # unknown or missing fields in the [[tests]] table
+            raise ValueError(f"{toml_path}: tests[{i}] has invalid fields: {exc}") from exc
+        except ValueError as exc:
+            # failed __post_init__ validation (bad scope, empty name, ...)
+            raise ValueError(f"{toml_path}: tests[{i}]: {exc}") from exc
+
+    return CertificationDefinition(
+        version=str(data["version"]),
+        description=str(data["description"]),
+        tests=tests,
+    )
+
 
 
 def discover_manifests(cert_dir: Path, versions: list[str]) -> list[Path]:
