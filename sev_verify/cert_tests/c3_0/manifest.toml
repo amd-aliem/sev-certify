@@ -1,0 +1,14 @@
+version = "3.0"
+description = "SEV 3.0 Tests (AMD EPYC 7003+)"
+
+# ── Level 3.0.0-0 ───────────────────────────────────────────
+
+[[tests]]
+name = "vm-launch-attest"
+description = "Launch an SEV-SNP guest and verify attestation report"
+module = "cert_tests.c3_0.c3_0_0_0.vm_launch_attest"
+scope = "mixed"
+level = "3.0.0-0"
+
+# ── Level 3.0.0-1 ───────────────────────────────────────────
+# (tests to be added)
