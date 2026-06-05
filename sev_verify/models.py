@@ -42,6 +42,20 @@ class Step:
             raise ValueError(
                     f"Step {self.name!r}: timeout must be positive, got {self.timeout}"
                     )
+        kind, sep, value = self.expected_result.partition(":")
+        if kind not in ("exit_code", "stdout_contains") or not sep:
+            raise ValueError(
+                    f"Step {self.name!r}: invalid expected_result {self.expected_result!r}; "
+                    f"expected 'exit_code:<int>' or 'stdout_contains:<string>'"
+                    )
+        if kind == "exit_code":
+            try:
+                int(value)
+            except ValueError:
+                raise ValueError(
+                        f"Step {self.name!r}: exit_code value must be an integer, "
+                        f"got {value!r}"
+                        )
 
 
 @dataclass
@@ -51,11 +65,13 @@ class TestDefinition:
     name: str
     module: str  # dotted module path, e.g. "cert_tests.common.snphost_ok"
     scope: Scope
+    description: str = ""
+    level: str = ""  # certification level, e.g. "3.0.0-0"
 
-    def __post_init__(self) -> None: 
+    def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("TestDefinition.name must not be empty")
-        if not self.module: 
+        if not self.module:
             raise ValueError(f"TestDefinition {self.name!r}: module must not be empty")
         if self.scope not in get_args(Scope):
             raise ValueError(
