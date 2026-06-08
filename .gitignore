@@ -19,3 +19,5 @@ images/*/*.initrd
 images/*/*.vmlinuz
 images/*/guest-*
 images/*/host-*
+
+results/
