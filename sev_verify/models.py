@@ -91,10 +91,19 @@ class CertificationDefinition:
     version: str
     description: str
     tests: list[TestDefinition] = field(default_factory=list)
+    # Ordered unique levels from the original manifest (preserved across filtering for chain validation)
+    all_levels: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.version:
             raise ValueError("CertificationDefinition.version must not be empty")
+        # Auto-populate all_levels from tests if not explicitly provided.
+        if not self.all_levels and self.tests:
+            seen: set[str] = set()
+            for t in self.tests:
+                if t.level and t.level not in seen:
+                    seen.add(t.level)
+                    self.all_levels.append(t.level)
 
 
 # ── Runtime result models (populated during execution) ──────────

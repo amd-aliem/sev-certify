@@ -55,10 +55,79 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="versions",
         action="append",
         default=[],
-        help="Certification version(s) to run (e.g. 3.0). Repeatable. "
+        help="Version filter(s). Accepts: 3.0 (all tests in cert 3.0), "
+        "3.0.0 (all level 3.0.0-* tests), 3.0.0-0 (exact level). "
+        "Comma-separated lists and repeated -v flags both work. "
         "If omitted, all cert_tests/*/manifest.toml are used.",
     )
     return parser.parse_args(argv)
+
+
+def _parse_version_filters(raw: list[str]) -> list[str]:
+    """Expand comma-separated -v values into a flat list of filters."""
+    filters: list[str] = []
+    for entry in raw:
+        for part in entry.split(","):
+            part = part.strip()
+            if part:
+                filters.append(part)
+    return filters
+
+
+def _manifest_version(version_filter: str) -> str:
+    """Extract the manifest-level version (first two components) from a filter.
+
+    '3.0'     -> '3.0'
+    '3.0.0'   -> '3.0'
+    '3.0.0-0' -> '3.0'
+    """
+    parts = version_filter.split(".")
+    return ".".join(parts[:2])
+
+
+def _matches_level(test_level: str, version_filter: str) -> bool:
+    """Check whether a test level matches a version filter.
+
+    Filter '3.0.0'   -> matches '3.0.0-0', '3.0.0-1', etc.
+    Filter '3.0.0-0' -> matches only '3.0.0-0' (exact)
+
+    Note: bare manifest versions like '3.0' are handled by the caller
+    and do not reach this function.
+    """
+    if not test_level:
+        return False
+    # Exact match (fully-qualified level like '3.0.0-0')
+    if version_filter == test_level:
+        return True
+    # '3.0.0' matches '3.0.0-*'
+    if "-" not in version_filter and test_level.startswith(version_filter + "-"):
+        return True
+    # '3.0' matches everything in the manifest (handled by caller)
+    return False
+
+
+def _filter_tests(
+    cert: CertificationDefinition, level_filters: list[str],
+) -> CertificationDefinition:
+    """Return a copy of cert with tests filtered to matching levels.
+
+    Preserves all_levels from the original manifest so the summary can
+    detect skipped prerequisite levels.
+    """
+    if not level_filters:
+        return cert
+
+    filtered = [
+        t for t in cert.tests
+        if any(_matches_level(t.level, f) for f in level_filters)
+    ]
+
+    return CertificationDefinition(
+        version=cert.version,
+        description=cert.description,
+        tests=filtered,
+        all_levels=list(cert.all_levels),  # defensive copy
+    )
 
 
 def load_manifest(toml_path: Path) -> CertificationDefinition:
@@ -99,25 +168,48 @@ def load_prereqs(cert_dir: Path) -> list[TestDefinition]:
     return _load_test_entries(prereqs_path, data)
 
 
-def discover_manifests(cert_dir: Path, versions: list[str]) -> list[Path]:
-    """Find all manifest.toml files in cert_tests/ subdirectories."""
+def discover_manifests(
+    cert_dir: Path, version_filters: list[str],
+) -> list[tuple[Path, list[str]]]:
+    """Find manifest.toml files and associated level filters.
+
+    Returns a list of (manifest_path, level_filters) tuples.
+    level_filters is empty when the entire manifest should run.
+    """
     if not cert_dir.is_dir():
         return []
 
-    if not versions:
-        return sorted(cert_dir.glob("*/manifest.toml"))
+    if not version_filters:
+        return [(p, []) for p in sorted(cert_dir.glob("*/manifest.toml"))]
 
-    manifest_paths = []
-    for version in versions:
-        subfolder = "c" + version.replace(".", "_")
+    # Group filters by manifest version (first two components).
+    # A bare version like '3.0' means "run all tests" (no level filter).
+    # A specific level like '3.0.0-0' filters within the manifest.
+    run_all: set[str] = set()
+    per_manifest: dict[str, list[str]] = {}
+    for vf in version_filters:
+        mv = _manifest_version(vf)
+        if vf == mv:
+            run_all.add(mv)
+        else:
+            per_manifest.setdefault(mv, []).append(vf)
+
+    results: list[tuple[Path, list[str]]] = []
+
+    for mv in dict.fromkeys(_manifest_version(vf) for vf in version_filters):
+        subfolder = "c" + mv.replace(".", "_")
         mpath = cert_dir / subfolder / "manifest.toml"
         if not mpath.exists():
-            print(f"Error: no manifest for version {version!r} "
+            print(f"Error: no manifest for version {mv!r} "
                   f"(expected {mpath})", file=sys.stderr)
             continue
-        manifest_paths.append(mpath)
 
-    return manifest_paths
+        if mv in run_all:
+            results.append((mpath, []))
+        else:
+            results.append((mpath, per_manifest.get(mv, [])))
+
+    return results
 
 
 # ── Output helpers ───────────────────────────────────────────────
@@ -272,6 +364,33 @@ def execute_certification(
     )
 
 
+def _highest_certified_level(cr: CertificationResult) -> str | None:
+    """Determine the highest certification level achieved.
+
+    Walks the manifest's full ordered level list. A level counts as
+    achieved only if every prior level was also run and passed.
+    Returns None if no contiguous chain of passing levels exists
+    (e.g. level 0 was skipped or failed).
+    """
+    # Build a map: level -> list of results for tests at that level
+    results_by_level: dict[str, list[str]] = {}
+    for tr in cr.test_results:
+        if tr.test.level:
+            results_by_level.setdefault(tr.test.level, []).append(tr.result)
+
+    highest = None
+    for level in cr.certification.all_levels:
+        level_results = results_by_level.get(level)
+        if not level_results:
+            # Level was not run (filtered out) — chain broken
+            break
+        if any(r != "pass" for r in level_results):
+            # Level had a failure — chain broken
+            break
+        highest = level
+    return highest
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     guest_path = Path(args.path_to_guest)
@@ -282,9 +401,10 @@ def main(argv: list[str] | None = None) -> int:
 
     cert_dir = Path(__file__).resolve().parent / "cert_tests"
 
-    manifest_paths = discover_manifests(cert_dir, args.versions)
+    version_filters = _parse_version_filters(args.versions)
+    manifest_entries = discover_manifests(cert_dir, version_filters)
 
-    if not manifest_paths:
+    if not manifest_entries:
         print(
             "Error: no manifest.toml found in cert_tests/*/",
             file=sys.stderr,
@@ -294,7 +414,6 @@ def main(argv: list[str] | None = None) -> int:
     _flush(f"   Guest: {guest_path}")
     _flush("")
 
-    run_start = time.monotonic()
     total_tests = 0
     total_passed = 0
 
@@ -325,30 +444,26 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── Run certifications ───────────────────────────────────────
     cert_results: list[CertificationResult] = []
-    for manifest_path in manifest_paths:
+    for manifest_path, level_filters in manifest_entries:
         cert = load_manifest(manifest_path)
+        cert = _filter_tests(cert, level_filters)
+        if not cert.tests:
+            levels = ", ".join(level_filters)
+            print(f"Warning: no tests match level filter(s) {levels!r} "
+                  f"in certification {cert.version}", file=sys.stderr)
+            continue
         cr = execute_certification(cert, guest_path)
         cert_results.append(cr)
         total_tests += len(cr.test_results)
         total_passed += sum(1 for tr in cr.test_results if tr.result == "pass")
 
     # ── Summary ──────────────────────────────────────────────────
-    elapsed = time.monotonic() - run_start
     _section("Summary")
     for cr in cert_results:
-        # Find the highest level where all tests passed
-        highest_passing = None
-        for tr in cr.test_results:
-            if not tr.test.level:
-                continue
-            if tr.result == "pass":
-                highest_passing = tr.test.level
-            else:
-                break
-        icon = _RESULT_LABEL.get(cr.result, "????")
-        level_info = f" (level {highest_passing})" if highest_passing else ""
-        label = f"   Certification {cr.certification.version}:{level_info}"
-        suffix = f" [{icon}]"
+        highest_passing = _highest_certified_level(cr)
+        badge = highest_passing or "---"
+        label = f"   Certification {cr.certification.version}:"
+        suffix = f" [{badge}]"
         _flush(f"{label}{' ' * max(_LINE_WIDTH - len(label) - len(suffix), 2)}{suffix}")
     _flush("")
 
