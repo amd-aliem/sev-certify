@@ -16,6 +16,7 @@ from .models import (
     TestDefinition,
     TestResult,
 )
+from .output import write_json, write_markdown
 from .runner import load_steps, run_step
 
 _LINE_WIDTH = 80
@@ -59,6 +60,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "3.0.0 (all level 3.0.0-* tests), 3.0.0-0 (exact level). "
         "Comma-separated lists and repeated -v flags both work. "
         "If omitted, all cert_tests/*/manifest.toml are used.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=Path,
+        default=Path("results"),
+        help="Directory for JSON and Markdown result files (default: results/)",
     )
     return parser.parse_args(argv)
 
@@ -456,6 +464,13 @@ def main(argv: list[str] | None = None) -> int:
         cert_results.append(cr)
         total_tests += len(cr.test_results)
         total_passed += sum(1 for tr in cr.test_results if tr.result == "pass")
+
+        certified_level = _highest_certified_level(cr)
+        json_path = write_json(cr, certified_level, args.output_dir)
+        md_path = write_markdown(cr, certified_level, args.output_dir)
+        _flush(f"   Wrote {json_path}")
+        _flush(f"   Wrote {md_path}")
+        _flush("")
 
     # ── Summary ──────────────────────────────────────────────────
     _section("Summary")
