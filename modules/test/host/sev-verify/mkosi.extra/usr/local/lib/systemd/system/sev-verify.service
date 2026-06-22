@@ -1,0 +1,12 @@
+[Unit]
+Description=Run sev-verify certification tests
+DefaultDependencies=no
+Wants=system.target
+After=system.target
+
+[Service]
+Type=oneshot
+ExecStart=python3 -m sev_verify /usr/local/lib/guest-image/guest.efi --output-dir /root/results
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=600
