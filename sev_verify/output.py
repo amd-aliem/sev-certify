@@ -56,6 +56,7 @@ def _test_dict(tr: TestResult) -> dict[str, Any]:
     passing = tr.result == "pass"
     return {
         "name": tr.test.name,
+        "description": tr.test.description,
         "scope": tr.test.scope,
         "level": tr.test.level or None,
         "result": tr.result,
@@ -194,11 +195,11 @@ def write_markdown(
             continue
         w(f"### Level {level}")
         w("")
-        w("| Test | Scope | Result |")
-        w("|------|-------|--------|")
+        w("| Test | Description | Result |")
+        w("|------|-------------|--------|")
         for tr in trs:
             icon = _RESULT_ICON.get(tr.result, tr.result)
-            w(f"| {tr.test.name} | {tr.test.scope} | {icon} |")
+            w(f"| {tr.test.name} | {tr.test.description} | {icon} |")
             if tr.result != "pass":
                 failures.append(tr)
         w("")
@@ -206,11 +207,11 @@ def write_markdown(
     if unlabeled:
         w("### Other Tests")
         w("")
-        w("| Test | Scope | Result |")
-        w("|------|-------|--------|")
+        w("| Test | Description | Result |")
+        w("|------|-------------|--------|")
         for tr in unlabeled:
             icon = _RESULT_ICON.get(tr.result, tr.result)
-            w(f"| {tr.test.name} | {tr.test.scope} | {icon} |")
+            w(f"| {tr.test.name} | {tr.test.description} | {icon} |")
             if tr.result != "pass":
                 failures.append(tr)
         w("")
