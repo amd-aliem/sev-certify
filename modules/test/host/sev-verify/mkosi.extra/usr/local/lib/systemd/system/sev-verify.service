@@ -6,7 +6,7 @@ After=system.target
 
 [Service]
 Type=oneshot
-ExecStart=python3 -m sev_verify /usr/local/lib/guest-image/guest.efi --output-dir /root/results
+ExecStart=/usr/local/lib/scripts/run-sev-verify.sh
 StandardOutput=journal+console
 StandardError=journal+console
 TimeoutStartSec=600

@@ -2,6 +2,26 @@
 set -euo pipefail
 
 RESULTS_DIR="/root/results"
+SEV_VERIFY_LOG="${RESULTS_DIR}/sev-verify.log"
+
+build_beacon_body() {
+  local md_file=$1
+  local body_file
+  body_file=$(mktemp)
+
+  cat "$md_file" > "$body_file"
+  if [ -f "$SEV_VERIFY_LOG" ]; then
+    {
+      echo ""
+      echo "### sev-verify output"
+      echo '```'
+      cat "$SEV_VERIFY_LOG"
+      echo '```'
+    } >> "$body_file"
+  fi
+
+  echo "$body_file"
+}
 
 # Determine OS name and version
 if [ -f /etc/os-release ]; then
@@ -10,8 +30,8 @@ if [ -f /etc/os-release ]; then
     OS_VERSION="${VERSION_ID:-""}"
 
     # Initialize OS release with the OS VERSION_CODENAME if VERSION_ID is missing in /etc/os-release.
-    if [[ -z "${OS_VERSION}" && -n "${VERSION_CODENAME}" ]]; then
-        OS_VERSION="${VERSION_CODENAME}"
+    if [[ -z "${OS_VERSION}" && -n "${VERSION_CODENAME:-}" ]]; then
+        OS_VERSION="${VERSION_CODENAME:-}"
     fi
 
     OS_LABEL="${OS_NAME}-${OS_VERSION}"
@@ -65,7 +85,10 @@ for json_file in "${json_files[@]}"; do
     PARAMS+=("--milestone" "c${certified_level}")
   fi
 
-  beacon report --title "$SEV_TITLE" --body "$md_file" "${PARAMS[@]}"
+  body_file=$(build_beacon_body "$md_file")
+
+  beacon report --title "$SEV_TITLE" --body "$body_file" "${PARAMS[@]}"
+  rm -f "$body_file"
 
   echo "Published SEV certificate via beacon with title: $SEV_TITLE"
 done
