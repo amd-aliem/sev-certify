@@ -9,6 +9,7 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .environment import detect_environment
 from .models import (
     CertificationDefinition,
     CertificationResult,
@@ -30,7 +31,12 @@ from .runner import (
     run_vm_stop_step,
     test_artifact_dir,
 )
-from .vm_profile import VMLaunchResult, stop_vm
+from .vm_profile import (
+    DEFAULT_QEMU_BINARY,
+    find_ovmf_path,
+    VMLaunchResult,
+    stop_vm,
+)
 
 _LINE_WIDTH = 80
 
@@ -573,6 +579,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         ovmf_override = str(args.ovmf.resolve())
 
+    # Resolve effective OVMF path for environment detection
+    effective_ovmf = ovmf_override or find_ovmf_path()
+
+    environment = detect_environment(
+        qemu_binary=qemu_override or DEFAULT_QEMU_BINARY,
+        ovmf_path=effective_ovmf,
+    )
+
     cert_dir = Path(__file__).resolve().parent / "cert_tests"
 
     version_filters = _parse_version_filters(args.versions)
@@ -585,11 +599,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    _flush(f"   Guest: {guest_path}")
-    if qemu_override:
-        _flush(f"   QEMU:  {qemu_override}")
-    if ovmf_override:
-        _flush(f"   OVMF:  {ovmf_override}")
+    _flush(f"   Guest:  {guest_path}")
+    if environment.get("kernel_version"):
+        _flush(f"   Kernel: {environment['kernel_version']}")
+    if environment.get("qemu_version"):
+        _flush(f"   QEMU:   {environment['qemu_version']}")
+    elif qemu_override:
+        _flush(f"   QEMU:   {qemu_override}")
+    if environment.get("ovmf_version"):
+        _flush(f"   OVMF:   {environment['ovmf_version']}")
+    elif effective_ovmf:
+        _flush(f"   OVMF:   {effective_ovmf}")
     _flush("")
 
     total_tests = 0
@@ -649,8 +669,8 @@ def main(argv: list[str] | None = None) -> int:
         total_passed += sum(1 for tr in cr.test_results if tr.result == "pass")
 
         certified_level = _highest_certified_level(cr)
-        json_path = write_json(cr, certified_level, args.output_dir)
-        md_path = write_markdown(cr, certified_level, args.output_dir)
+        json_path = write_json(cr, certified_level, args.output_dir, environment=environment)
+        md_path = write_markdown(cr, certified_level, args.output_dir, environment=environment)
         _flush(f"   Wrote {json_path}")
         _flush(f"   Wrote {md_path}")
         _flush("")
