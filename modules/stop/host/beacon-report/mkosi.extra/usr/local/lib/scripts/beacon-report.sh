@@ -55,7 +55,6 @@ fi
 for json_file in "${json_files[@]}"; do
   # Parse fields from sev-verify JSON output
   cert_version=$(jq -r '.certification_version' "$json_file")
-  result=$(jq -r '.result' "$json_file")
   certified_level=$(jq -r '.certified_level // empty' "$json_file")  # null -> empty string
 
   # Corresponding markdown report

@@ -134,7 +134,7 @@ def write_markdown(
     lines: list[str] = []
     w = lines.append
 
-    if certified_level and cr.result == "pass":
+    if certified_level:
         w(f"# Achieved Certification Level {certified_level}")
     else:
         w("# Failed to Achieve a Certification Level")
