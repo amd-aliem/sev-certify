@@ -102,9 +102,11 @@ def write_json(
         "max_certification_level": cr.certification.max_certification_level,
         "started_at": cr.started_at,
         "completed_at": cr.completed_at,
-        "environment": environment or {},
         "levels": levels_out,
     }
+
+    if environment:
+        doc["environment"] = environment
 
     if unlabeled:
         doc["unlabeled_tests"] = [_test_dict(tr) for tr in unlabeled]
@@ -132,7 +134,6 @@ def write_markdown(
     """Write human-readable Markdown certification report."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    result_label = "PASS" if cr.result == "pass" else "FAIL"
     lines: list[str] = []
     w = lines.append
 
@@ -168,6 +169,8 @@ def write_markdown(
             env_lines.append(f"- **Guest OS:** {guest_os}")
         if environment.get("qemu_version"):
             env_lines.append(f"- **QEMU:** {environment['qemu_version']}")
+        elif environment.get("qemu_binary"):
+            env_lines.append(f"- **QEMU:** {environment['qemu_binary']}")
         if environment.get("ovmf_version"):
             env_lines.append(f"- **OVMF:** {environment['ovmf_version']}")
         elif environment.get("ovmf_path"):

@@ -135,7 +135,7 @@ class VMProfile:
         return cls(**{k: v for k, v in normalized.items() if k in known})
 
     def resolved_ovmf_path(self) -> str:
-        """"
+        """
         Verify provided OVMF path is present.
 
         If not, look for OVMF on default locations.
