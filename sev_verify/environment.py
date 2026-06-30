@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -38,6 +39,9 @@ def _get_kernel_version() -> str | None:
 
 def _get_ovmf_version(path: str) -> str | None:
     """Try dpkg then rpm to find the package version owning *path*."""
+    if not os.path.exists(path):
+        return None
+
     # dpkg -S /path -> "package: /path"
     try:
         proc = subprocess.run(
@@ -83,6 +87,7 @@ def detect_environment(
     host_os = get_host_os_info()
     return {
         "qemu_version": _get_qemu_version(qemu_binary),
+        "qemu_binary": qemu_binary,
         "kernel_version": _get_kernel_version(),
         "ovmf_version": _get_ovmf_version(ovmf_path) if ovmf_path else None,
         "ovmf_path": ovmf_path,

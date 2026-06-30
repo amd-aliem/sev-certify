@@ -607,11 +607,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         ovmf_override = str(args.ovmf.resolve())
 
-    # Resolve effective OVMF path for environment detection
+    # Resolve effective binaries for environment detection
+    effective_qemu = qemu_override or DEFAULT_QEMU_BINARY
     effective_ovmf = ovmf_override or find_ovmf_path()
 
     environment = detect_environment(
-        qemu_binary=qemu_override or DEFAULT_QEMU_BINARY,
+        qemu_binary=effective_qemu,
         ovmf_path=effective_ovmf,
     )
 
@@ -634,8 +635,8 @@ def main(argv: list[str] | None = None) -> int:
         _flush(f"   Kernel: {environment['kernel_version']}")
     if environment.get("qemu_version"):
         _flush(f"   QEMU:   {environment['qemu_version']}")
-    elif qemu_override:
-        _flush(f"   QEMU:   {qemu_override}")
+    elif effective_qemu:
+        _flush(f"   QEMU:   {effective_qemu}")
     if environment.get("ovmf_version"):
         _flush(f"   OVMF:   {environment['ovmf_version']}")
     elif effective_ovmf:
