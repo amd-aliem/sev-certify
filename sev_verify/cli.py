@@ -36,6 +36,7 @@ from .vm_profile import (
     DEFAULT_QEMU_BINARY,
     find_ovmf_path,
     VMLaunchResult,
+    VMProfileError,
     stop_vm,
 )
 
@@ -114,6 +115,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="PATH",
         help="Override OVMF firmware .fd (overrides test VMProfile and host search paths)",
+    )
+    parser.add_argument(
+        "--disposable-host",
+        dest="disposable_host",
+        action="store_true",
+        default=False,
+        help="Host will be rebooted/reprovisioned, so permit boot-session-only "
+        "changes — notably `snphost commit` advancing the committed TCB floor. "
+        "Without it, tests skip commit on provisional firmware (Committed < "
+        "Current) to preserve rollback.",
     )
     return parser.parse_args(argv)
 
@@ -322,6 +333,7 @@ def execute_test(
     qemu_binary: str | None = None,
     ovmf_path: str | None = None,
     environment: dict[str, str | None] | None = None,
+    disposable_host: bool = False,
 ) -> TestResult:
     """Run a test, printing each step live as it executes."""
     started_at = datetime.now(timezone.utc).isoformat()
@@ -370,6 +382,7 @@ def execute_test(
             launch=None,
             cli_qemu_binary=qemu_binary,
             cli_ovmf_path=ovmf_path,
+            disposable_host=disposable_host,
         )
 
         overall = "pass"
@@ -427,19 +440,27 @@ def execute_test(
                     )
                 else:
                     if launch is None:
-                        launch = profile.vm_launch()
-                        if launch.ok and environment is not None:
-                            update_environment_with_guest_os(environment, launch.profile)
-                    if not launch.ok:
+                        try:
+                            launch = profile.vm_launch()
+                            if launch.ok and environment is not None:
+                                update_environment_with_guest_os(environment, launch.profile)
+                        except VMProfileError as exc:
+                            sr = StepResult(
+                                step=step,
+                                result="error",
+                                stderr=str(exc),
+                                duration_ms=0,
+                            )
+                    if launch is not None and not launch.ok:
                         sr = StepResult(
                             step=step,
                             result="error",
                             stderr=launch.message,
                             duration_ms=0,
                         )
-                    elif step.kind == "guest":
+                    elif launch is not None and step.kind == "guest":
                         sr = run_guest_step(step, launch.profile)
-                    else:
+                    elif launch is not None:
                         sr = run_guest_pull_step(step, launch.profile, artifact_dir)
             elif step.kind == "callable":
                 sr = run_callable_step(step, ctx)
@@ -500,6 +521,7 @@ def execute_certification(
     qemu_binary: str | None = None,
     ovmf_path: str | None = None,
     environment: dict[str, str | None] | None = None,
+    disposable_host: bool = False,
 ) -> CertificationResult:
     """Run all tests in a certification with live output."""
     started_at = datetime.now(timezone.utc).isoformat()
@@ -527,6 +549,7 @@ def execute_certification(
             qemu_binary=qemu_binary,
             ovmf_path=ovmf_path,
             environment=environment,
+            disposable_host=disposable_host,
         )
         test_results.append(tr)
         if tr.result != "pass":
@@ -661,6 +684,7 @@ def main(argv: list[str] | None = None) -> int:
                 qemu_binary=qemu_override,
                 ovmf_path=ovmf_override,
                 environment=environment,
+                disposable_host=args.disposable_host,
             )
             prereq_results.append(tr)
             _flush("")
@@ -696,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
             qemu_binary=qemu_override,
             ovmf_path=ovmf_override,
             environment=environment,
+            disposable_host=args.disposable_host,
         )
         cert_results.append(cr)
         total_tests += len(cr.test_results)

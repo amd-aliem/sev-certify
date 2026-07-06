@@ -369,6 +369,10 @@ class StepContext:
     # Global CLI overrides (same as ``python3 -m sev_verify --qemu-binary`` / ``--ovmf``).
     cli_qemu_binary: str | None = None
     cli_ovmf_path: str | None = None
+    # Set by ``--disposable-host``: this host is a dedicated testing host that
+    # will be rebooted/reprovisioned, so tests may make configuration changes
+    # that persist for the boot session (e.g. committing firmware TCB levels).
+    disposable_host: bool = False
 
 
 @dataclass
