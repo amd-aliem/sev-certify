@@ -12,15 +12,16 @@ AMD EPYC 7003 (Milan)
 -------------
 | OS |  Status |  3.0 Certification |
 |---|---|---|
-| CentOS 10 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/225) |
+| CentOS 10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/199) |
 | Debian 13 |  ❌ |  [N/A](https://github.com/AMDEPYC/sev-certify/issues/152) |
 | Debian Forky | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/228) |
-| Fedora 41 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/229) |
+| Fedora 41 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/200) |
 | Rocky 10.0 |  ❌ |  N/A |
 | Rocky 10.1 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/230) |
-| Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/231) |
-| Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/232) |
-| Ubuntu 26.04 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/248) |
+| Rocky 10.2 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/201) |
+| Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/195) |
+| Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/197) |
+| Ubuntu 26.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/196) |
 
 AMD EPYC 9004 (Genoa)
 -------------
