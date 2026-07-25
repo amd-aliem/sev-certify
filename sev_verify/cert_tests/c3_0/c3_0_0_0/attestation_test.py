@@ -25,7 +25,7 @@ from sev_verify.vm_profile import VMProfile, VMProfileError
 
 vm_profile = VMProfile(
     image_path="",
-    memory_mb=2048,
+    memory_mb=4096,
 )
 
 def calculate_measurement(ctx: StepContext) -> StepHandlerResult:

@@ -34,7 +34,7 @@ def find_ovmf_path() -> str | None:
 
 DEFAULT_GUEST_ERROR_LOG = "/tmp/guest-error.log"
 DEFAULT_QEMU_BINARY = "qemu-system-x86_64"
-DEFAULT_MEMORY_MB = 2048
+DEFAULT_MEMORY_MB = 4096
 DEFAULT_VSOCK_CID = 3
 DEFAULT_VSOCK_PORT = 5000
 HOST_DATA_SIZE = 32
