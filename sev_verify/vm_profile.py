@@ -20,6 +20,7 @@ from typing import Any, TextIO
 DEFAULT_OVMF_CANDIDATES = (
     "/usr/share/ovmf/OVMF.amdsev.fd",
     "/usr/share/edk2/ovmf/OVMF.amdsev.fd",
+    "/usr/share/qemu/ovmf-x86_64-sev.bin",
 )
 
 
