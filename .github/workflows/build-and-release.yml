@@ -81,6 +81,8 @@ jobs:
             release: "26.04"
           - distro: opensuse
             release: "16.0"
+          - distro: fedora
+            release: "44"
 
     steps:
       - name: Checkout
