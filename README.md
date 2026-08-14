@@ -17,7 +17,7 @@ This table contains operating systems that have undergone certification testing 
 | Fedora 41 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/229) |
 | Rocky 10.1 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/230) |
 | Ubuntu 25.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/203) |
-| Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/232) |
+| Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/204) |
 | Ubuntu 26.04 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/192) |
 
 ✅ Latest Level Certified
