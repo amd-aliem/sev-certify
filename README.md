@@ -11,7 +11,7 @@ This table contains operating systems that have undergone certification testing 
 
 | OS | Status | [EPYC 7003][cert-3.0] | [EPYC 9004][cert-3.1] | [EPYC 8005][cert-4.0] | [EPYC 9005][cert-4.1] |
 |---|---|---|---|---|---|
-| CentOS 10 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/225) |
+| CentOS 10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/206) |
 | Debian 13 |  ❌ |  [N/A](https://github.com/AMDEPYC/sev-certify/issues/152) |
 | Debian Forky | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/228) |
 | Fedora 41 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/229) |
