@@ -145,7 +145,7 @@ jobs:
                 
                 updateTable(lines, table.tableStart, table.tableEnd, table.columnIndex);
                 await github.rest.repos.createOrUpdateFileContents({
-                  ...repo, path: certPath, message: `cert: Update certification matrix for ${osName}`,
+                  ...repo, path: certPath, message: `docs: Update certification matrix for ${osName}`,
                   content: Buffer.from(lines.join('\n')).toString('base64'), sha, branch: branchName
                 });
 
@@ -166,7 +166,7 @@ jobs:
                       
                       updateTable(readmeLines, readmeTableStart, readmeTableEnd, readmeColumnIndex);
                       await github.rest.repos.createOrUpdateFileContents({
-                        ...repo, path: readmePath, message: `cert: Update master certification table for ${osName}`,
+                        ...repo, path: readmePath, message: `docs: Update master certification table for ${osName}`,
                         content: Buffer.from(readmeLines.join('\n')).toString('base64'), sha: readmeSha, branch: branchName
                       });
                     }
@@ -183,7 +183,7 @@ jobs:
                 } else {
                   await github.rest.pulls.create({
                     ...repo,
-                    title: 'cert: Update certification matrix',
+                    title: 'docs: Update certification matrix',
                     head: branchName,
                     base: defaultBranch,
                     body: `Automatically updating certification matrix.\n\nStarted with: **${osName}** (${milestone}) - refs #${issue.number}`
