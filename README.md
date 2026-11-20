@@ -19,7 +19,7 @@ This table contains operating systems that have undergone certification testing 
 | Opensuse leap 16.0 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/218) |
 | Rocky 10.1 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/230) |
 | Rocky 10.2 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/205) |
-| Rocky 10.3 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/212) |
+| Rocky 10.3 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/225) |
 | Ubuntu 25.04 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/221) |
 | Ubuntu 25.10 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/223) |
 | Ubuntu 26.04 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/217) |
