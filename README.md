@@ -13,7 +13,7 @@ This table contains operating systems that have undergone certification testing 
 |---|---|---|---|---|---|
 | CentOS 10 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/219) |
 | Debian 13 |  ❌ |  [N/A](https://github.com/AMDEPYC/sev-certify/issues/152) |
-| Debian Forky | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/228) |
+| Debian Forky | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/222) |
 | Fedora 41 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/216) |
 | Fedora 44 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/220) |
 | Opensuse leap 16.0 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/218) |
