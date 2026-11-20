@@ -23,7 +23,7 @@ AMD EPYC 7003 (Milan)
 | Rocky 10.2 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/205) |
 | Rocky 10.3 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/212) |
 | Ubuntu 25.04 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/221) |
-| Ubuntu 25.10 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/204) |
+| Ubuntu 25.10 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/223) |
 | Ubuntu 26.04 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/217) |
 
 AMD EPYC 9004 (Genoa)
