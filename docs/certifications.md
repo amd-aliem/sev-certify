@@ -17,6 +17,7 @@ AMD EPYC 7003 (Milan)
 | Debian Forky | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/228) |
 | Fedora 41 | ✅ | [c3.0.0-1](https://github.com/amd-aliem/sev-certify/issues/216) |
 | Fedora 44 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/214) |
+| Opensuse leap 16.0 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/218) |
 | Rocky 10.0 |  ❌ |  N/A |
 | Rocky 10.1 | ✅ | [c3.0.0-0](https://github.com/AMDEPYC/sev-certify/issues/230) |
 | Rocky 10.2 | ✅ | [c3.0.0-0](https://github.com/amd-aliem/sev-certify/issues/205) |
